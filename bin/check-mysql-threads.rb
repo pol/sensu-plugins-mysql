@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/sensu/embedded/bin/ruby
 #
 #   check-mysql-threads.rb
 #
@@ -29,10 +29,13 @@
 #   Released under the same terms as Sensu (the MIT license); see LICENSE
 #   for details.
 #
+# Modified by Pol Llovet <pol@actionverb.com> to allow loading rails-style yml config files 
+
 
 require 'sensu-plugin/check/cli'
 require 'mysql'
 require 'inifile'
+require 'yaml'
 
 class CheckMySQLHealth < Sensu::Plugin::Check::CLI
   option :user,
@@ -48,8 +51,13 @@ class CheckMySQLHealth < Sensu::Plugin::Check::CLI
 
   option :ini,
          description: 'My.cnf ini file',
-         short: '-i',
+         short: '-i VALUE',
          long: '--ini VALUE'
+
+  option :yaml,
+         short: '-y',
+         long: '--yaml VALUE',
+         description: 'My.cnf yaml file'
 
   option :ini_section,
          description: 'Section in my.cnf ini file',
@@ -99,15 +107,24 @@ class CheckMySQLHealth < Sensu::Plugin::Check::CLI
 
   def run
     if config[:ini]
-      ini = IniFile.load(config[:ini])
-      section = ini[config[:ini_section]]
-      db_user = section['user']
-      db_pass = section['password']
+      ini        = IniFile.load(config[:ini])
+      section    = ini[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
+    elsif config[:yaml]
+      yml        = YAML.safe_load(File.read(config[:yaml]))
+      section    = yml[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
     else
-      db_user = config[:user]
-      db_pass = config[:password]
+      db_user    = config[:username]
+      db_pass    = config[:password]
+      mysql_host = config[:hostname]
     end
-    db = Mysql.real_connect(config[:hostname], db_user, db_pass, config[:database], config[:port].to_i, config[:socket])
+
+    db = Mysql.real_connect(mysql_host, db_user, db_pass, config[:database], config[:port].to_i, config[:socket])
     run_thr = db.query("SHOW GLOBAL STATUS LIKE 'Threads_running'").fetch_hash.fetch('Value').to_i
     critical "MySQL currently running threads: #{run_thr}" if run_thr >= config[:maxcrit].to_i
     warning "MySQL currently running threads: #{run_thr}" if run_thr >= config[:maxwarn].to_i

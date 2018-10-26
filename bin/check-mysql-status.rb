@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/sensu/embedded/bin/ruby
 #
 # MySQL Status Plugin
 # ===
@@ -27,9 +27,12 @@
 #   password="abcd1234"
 #   socket="/var/lib/mysql/mysql.sock"
 #
+# Modified by Pol Llovet <pol@actionverb.com> to allow loading rails-style yml config files 
+# Note: this check is a mess, and needs to be rewritten.  Don't use it in production.
 
 require 'sensu-plugin/check/cli'
 require 'inifile'
+require 'yaml'
 require 'open3'
 
 # Check MySQL Status
@@ -48,8 +51,13 @@ class CheckMySQLStatus < Sensu::Plugin::Check::CLI
 
   option :ini,
          description: 'My.cnf ini file',
-         short: '-i',
+         short: '-i VALUE',
          long: '--ini VALUE'
+
+  option :yaml,
+         short: '-y',
+         long: '--yaml VALUE',
+         description: 'My.cnf yaml file'
 
   option :ini_section,
          description: 'Section in my.cnf ini file',
@@ -111,19 +119,32 @@ class CheckMySQLStatus < Sensu::Plugin::Check::CLI
 
   def credentials
     if config[:ini]
-      ini = IniFile.load(config[:ini])
-      section = ini[config[:ini_section]]
-      db_user = section['user']
-      db_pass = section['password']
+      ini        = IniFile.load(config[:ini])
+      section    = ini[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
       db_socket = if config[:socket]
                     config[:socket]
                   else
                     section['socket']
                   end
+      mysql_host = section['host']
+    elsif config[:yaml]
+      yml        = YAML.safe_load(File.read(config[:yaml]))
+      section    = yml[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      db_socket = if config[:socket]
+                    config[:socket]
+                  else
+                    section['socket']
+                  end
+      mysql_host = section['host']
     else
-      db_user = config[:user]
-      db_pass = config[:password]
+      db_user    = config[:username]
+      db_pass    = config[:password]
       db_socket = config[:socket]
+      mysql_host = config[:hostname]
     end
     [db_user, db_pass, db_socket]
   end

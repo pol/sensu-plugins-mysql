@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/sensu/embedded/bin/ruby
 #
 # MySQL Disk Usage Check
 # ===
@@ -9,10 +9,13 @@
 # for details.
 #
 # Check the size of the database and compare to crit and warn thresholds
+#
+# Modified by Pol Llovet <pol@actionverb.com> to allow loading rails-style yml config files 
 
 require 'sensu-plugin/check/cli'
 require 'mysql'
 require 'inifile'
+require 'yaml'
 
 class CheckMysqlDisk < Sensu::Plugin::Check::CLI
   option :host,
@@ -32,8 +35,13 @@ class CheckMysqlDisk < Sensu::Plugin::Check::CLI
 
   option :ini,
          description: 'My.cnf ini file',
-         short: '-i',
+         short: '-i VALUE',
          long: '--ini VALUE'
+
+  option :yaml,
+         short: '-y',
+         long: '--yaml VALUE',
+         description: 'My.cnf yaml file'
 
   option :ini_section,
          description: 'Section in my.cnf ini file',
@@ -76,15 +84,23 @@ class CheckMysqlDisk < Sensu::Plugin::Check::CLI
 
   def run
     if config[:ini]
-      ini = IniFile.load(config[:ini])
-      section = ini[config[:ini_section]]
-      db_user = section['user']
-      db_pass = section['password']
+      ini        = IniFile.load(config[:ini])
+      section    = ini[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
+    elsif config[:yaml]
+      yml        = YAML.safe_load(File.read(config[:yaml]))
+      section    = yml[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
     else
-      db_user = config[:user]
-      db_pass = config[:pass]
+      db_user    = config[:username]
+      db_pass    = config[:password]
+      mysql_host = config[:host]
     end
-    db_host = config[:host]
+    db_host = mysql_host
     disk_size = config[:size]
     critical_usage = config[:crit]
     warning_usage = config[:warn]
@@ -95,7 +111,7 @@ class CheckMysqlDisk < Sensu::Plugin::Check::CLI
 
     begin
       total_size = 0.0
-      db = Mysql.real_connect(config[:host], db_user, db_pass, nil, config[:port], config[:socket])
+      db = Mysql.real_connect(db_host, db_user, db_pass, nil, config[:port], config[:socket])
 
       results = db.query <<-EOSQL
         SELECT table_schema,

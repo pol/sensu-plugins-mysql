@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/sensu/embedded/bin/ruby
 #
 # MySQL Alive Plugin
 # ===
@@ -30,10 +30,13 @@
 #   user=user
 #   password="password"
 #
+# Modified by Pol Llovet <pol@actionverb.com> to allow loading rails-style yml config files 
+
 
 require 'sensu-plugin/check/cli'
 require 'mysql'
 require 'inifile'
+require 'yaml'
 
 class CheckMySQL < Sensu::Plugin::Check::CLI
   option :user,
@@ -50,6 +53,11 @@ class CheckMySQL < Sensu::Plugin::Check::CLI
          description: 'My.cnf ini file',
          short: '-i VALUE',
          long: '--ini VALUE'
+
+  option :yaml,
+         short: '-y',
+         long: '--yaml VALUE',
+         description: 'My.cnf yaml file'
 
   option :ini_section,
          description: 'Section in my.cnf ini file',
@@ -80,17 +88,25 @@ class CheckMySQL < Sensu::Plugin::Check::CLI
 
   def run
     if config[:ini]
-      ini = IniFile.load(config[:ini])
-      section = ini[config[:ini_section]]
-      db_user = section['user']
-      db_pass = section['password']
+      ini        = IniFile.load(config[:ini])
+      section    = ini[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
+    elsif config[:yaml]
+      yml        = YAML.safe_load(File.read(config[:yaml]))
+      section    = yml[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
     else
-      db_user = config[:user]
-      db_pass = config[:password]
+      db_user    = config[:username]
+      db_pass    = config[:password]
+      mysql_host = config[:hostname]
     end
 
     begin
-      db = Mysql.real_connect(config[:hostname], db_user, db_pass, config[:database], config[:port].to_i, config[:socket])
+      db = Mysql.real_connect(mysql_host, db_user, db_pass, config[:database], config[:port].to_i, config[:socket])
       info = db.get_server_info
       ok "Server version: #{info}"
     rescue Mysql::Error => e

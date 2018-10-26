@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/sensu/embedded/bin/ruby
 #
 # metrics-mysql-processes
 #
@@ -42,11 +42,16 @@
 #   Jonathan Ballet <jballet@edgelab.ch>
 #   Released under the same terms as Sensu (the MIT license); see LICENSE
 #   for details.
+#
+# Modified by Pol Llovet <pol@actionverb.com> to allow loading rails-style yml config files 
+#
+
 
 require 'sensu-plugin/metric/cli'
 require 'mysql'
 require 'socket'
 require 'inifile'
+require 'yaml'
 
 class MetricsMySQLProcesses < Sensu::Plugin::Metric::CLI::Graphite
   option :host,
@@ -78,10 +83,15 @@ class MetricsMySQLProcesses < Sensu::Plugin::Metric::CLI::Graphite
          long: '--ini VALUE',
          description: 'My.cnf ini file'
 
+  option :yaml,
+         short: '-y',
+         long: '--yaml VALUE',
+         description: 'My.cnf yaml file'
+
   option :ini_section,
          description: 'Section in my.cnf ini file',
          long: '--ini-section VALUE',
-         default: 'client'
+         default: 'production'
 
   option :scheme,
          description: 'Metric naming scheme, text to prepend to metric',
@@ -95,48 +105,61 @@ class MetricsMySQLProcesses < Sensu::Plugin::Metric::CLI::Graphite
          description: 'MySQL Unix socket to connect to'
 
   def run
-    config[:host].split(' ').each do |mysql_host|
-      mysql_shorthostname = mysql_host.split('.')[0]
-      if config[:ini]
-        ini = IniFile.load(config[:ini])
-        section = ini[config[:ini_section]]
-        db_user = section['user']
-        db_pass = section['password']
-      else
-        db_user = config[:username]
-        db_pass = config[:password]
-      end
-      begin
-        mysql = Mysql.new(mysql_host, db_user, db_pass, nil, config[:port], config[:socket])
 
-        results = mysql.query('SHOW PROCESSLIST')
-      rescue => e
-        unknown "Unable to query MySQL: #{e.message}"
-      end
-
-      metrics = {
-        'user' => {},
-        'database' => {},
-        'command' => {}
-      }
-
-      metrics.each_value { |value| value.default = 0 }
-
-      results.each_hash do |row|
-        metrics['user'][row['User']] += 1
-        if row['db'] # If no database has been selected by the process, it is set to nil.
-          metrics['database'][row['db']] += 1
-        end
-        metrics['command'][row['Command']] += 1
-      end
-
-      metrics.each do |key, value|
-        value.each do |instance, count|
-          output "#{config[:scheme]}.#{mysql_shorthostname}.#{key}.#{instance}", count
-        end
-      end
+    if config[:ini]
+      ini        = IniFile.load(config[:ini])
+      section    = ini[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
+    elsif config[:yaml]
+      yml        = YAML.safe_load(File.read(config[:yaml]))
+      section    = yml[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
+    else
+      db_user    = config[:username]
+      db_pass    = config[:password]
+      mysql_host = config[:host]
     end
 
-    ok
+    mysql_shorthostname = mysql_host.split('.')[0]
+
+    begin
+      mysql = Mysql.new(mysql_host, db_user, db_pass, nil, config[:port], config[:socket])
+
+      results = mysql.query('SHOW PROCESSLIST')
+    rescue => e
+      unknown "Unable to query MySQL: #{e.message}"
+    end
+
+    metrics = {
+      'user' => {},
+      'database' => {},
+      'time' => {},
+      'command' => {}
+    }
+
+    metrics.each_value { |value| value.default = 0 }
+    index = 0
+
+    results.each_hash do |row|
+      index += 1
+      metrics['user'][row['User']] += 1
+      if row['db'] # If no database has been selected by the process, it is set to nil.
+        metrics['database'][row['db']] += 1
+      end
+      metrics['command'][row['Command']] += 1
+      metrics['time'][row['Command']] += row['Time'].to_i
+    end
+
+    metrics.each do |key, value|
+      value.each do |instance, count|
+        output "#{config[:scheme]}.#{mysql_shorthostname}.#{key}.#{instance}", count
+      end
+    end
   end
+
+  ok
 end

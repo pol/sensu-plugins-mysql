@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/sensu/embedded/bin/ruby
 #
 # MySQL Replication Status (modded from disk)
 # ===
@@ -28,10 +28,13 @@
 #   user=user
 #   password="password"
 #
+# Modified by Pol Llovet <pol@actionverb.com> to allow loading rails-style yml config files 
+
 
 require 'sensu-plugin/check/cli'
 require 'mysql'
 require 'inifile'
+require 'yaml'
 
 class CheckMysqlReplicationStatus < Sensu::Plugin::Check::CLI
   option :host,
@@ -68,9 +71,14 @@ class CheckMysqlReplicationStatus < Sensu::Plugin::Check::CLI
          description: 'Replication master connection name'
 
   option :ini,
-         short: '-i',
-         long: '--ini VALUE',
-         description: 'My.cnf ini file'
+         description: 'My.cnf ini file',
+         short: '-i VALUE',
+         long: '--ini VALUE'
+
+  option :yaml,
+         short: '-y',
+         long: '--yaml VALUE',
+         description: 'My.cnf yaml file'
 
   option :ini_section,
          description: 'Section in my.cnf ini file',
@@ -95,15 +103,23 @@ class CheckMysqlReplicationStatus < Sensu::Plugin::Check::CLI
 
   def run
     if config[:ini]
-      ini = IniFile.load(config[:ini])
-      section = ini[config[:ini_section]]
-      db_user = section['user']
-      db_pass = section['password']
+      ini        = IniFile.load(config[:ini])
+      section    = ini[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
+    elsif config[:yaml]
+      yml        = YAML.safe_load(File.read(config[:yaml]))
+      section    = yml[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
     else
-      db_user = config[:user]
-      db_pass = config[:pass]
+      db_user    = config[:username]
+      db_pass    = config[:password]
+      mysql_host = config[:host]
     end
-    db_host = config[:host]
+    db_host = mysql_host
     db_conn = config[:master_connection]
 
     if [db_host, db_user, db_pass].any?(&:nil?)

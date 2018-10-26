@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/sensu/embedded/bin/ruby
 #
 # Push mysql stats into graphite
 # ===
@@ -34,11 +34,14 @@
 #   user=user
 #   password="password"
 #
+# Modified by Pol Llovet <pol@actionverb.com> to allow loading rails-style yml config files 
+#
 
 require 'sensu-plugin/metric/cli'
 require 'mysql'
 require 'socket'
 require 'inifile'
+require 'yaml'
 
 class MysqlGraphite < Sensu::Plugin::Metric::CLI::Graphite
   option :host,
@@ -70,10 +73,15 @@ class MysqlGraphite < Sensu::Plugin::Metric::CLI::Graphite
          long: '--ini VALUE',
          description: 'My.cnf ini file'
 
+  option :yaml,
+         short: '-y',
+         long: '--yaml VALUE',
+         description: 'My.cnf yaml file'
+
   option :ini_section,
          description: 'Section in my.cnf ini file',
          long: '--ini-section VALUE',
-         default: 'client'
+         default: 'production'
 
   option :scheme,
          description: 'Metric naming scheme, text to prepend to metric',
@@ -203,66 +211,76 @@ class MysqlGraphite < Sensu::Plugin::Metric::CLI::Graphite
       }
     }
 
-    config[:host].split(' ').each do |mysql_host|
-      mysql_shorthostname = mysql_host.split('.')[0]
-      if config[:ini]
-        ini = IniFile.load(config[:ini])
-        section = ini[config[:ini_section]]
-        db_user = section['user']
-        db_pass = section['password']
-      else
-        db_user = config[:username]
-        db_pass = config[:password]
-      end
-      begin
-        mysql = Mysql.new(mysql_host, db_user, db_pass, nil, config[:port], config[:socket])
+    if 
 
-        results = mysql.query('SHOW GLOBAL STATUS')
-      rescue => e
-        puts e.message
-      end
-
-      results.each_hash do |row|
-        metrics.each do |category, var_mapping|
-          if var_mapping.key?(row['Variable_name'])
-            output "#{config[:scheme]}.#{mysql_shorthostname}.#{category}.#{var_mapping[row['Variable_name']]}", row['Value']
-          end
-        end
-      end
-
-      begin
-        slave_results = mysql.query('SHOW SLAVE STATUS')
-        # should return a single element array containing one hash
-        # #YELLOW
-        slave_results.fetch_hash.each_pair do |key, value|
-          if metrics['general'].include?(key)
-            # Replication lag being null is bad, very bad, so negativate it here
-            value = -1 if key == 'Seconds_Behind_Master' && value.nil?
-            output "#{config[:scheme]}.#{mysql_shorthostname}.general.#{metrics['general'][key]}", value
-          end
-        end
-      rescue => e
-        puts "Error querying slave status: #{e}" if config[:verbose]
-      end
-
-      begin
-        variables_results = mysql.query('SHOW GLOBAL VARIABLES')
-
-        category = 'configuration'
-        variables_results.each_hash do |row|
-          metrics[category].each do |metric, desc|
-            if metric.casecmp(row['Variable_name']) == 0
-              output "#{config[:scheme]}.#{mysql_shorthostname}.#{category}.#{desc}", row['Value']
-            end
-          end
-        end
-      rescue => e
-        puts e.message
-      end
-
-      mysql.close if mysql
+    if config[:ini]
+      ini        = IniFile.load(config[:ini])
+      section    = ini[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
+    elsif config[:yaml]
+      yml        = YAML.safe_load(File.read(config[:yaml]))
+      section    = yml[config[:ini_section]]
+      db_user    = section['user']
+      db_pass    = section['password']
+      mysql_host = section['host']
+    else
+      db_user    = config[:username]
+      db_pass    = config[:password]
+      mysql_host = config[:host]
     end
 
-    ok
+    mysql_shorthostname = mysql_host.split('.')[0]
+
+    begin
+      mysql = Mysql.new(mysql_host, db_user, db_pass, nil, config[:port], config[:socket])
+
+      results = mysql.query('SHOW GLOBAL STATUS')
+    rescue => e
+      puts e.message
+    end
+
+    results.each_hash do |row|
+      metrics.each do |category, var_mapping|
+        if var_mapping.key?(row['Variable_name'])
+          output "#{config[:scheme]}.#{mysql_shorthostname}.#{category}.#{var_mapping[row['Variable_name']]}", row['Value']
+        end
+      end
+    end
+
+    begin
+      slave_results = mysql.query('SHOW SLAVE STATUS')
+      # should return a single element array containing one hash
+      # #YELLOW
+      slave_results.fetch_hash.each_pair do |key, value|
+        if metrics['general'].include?(key)
+          # Replication lag being null is bad, very bad, so negativate it here
+          value = -1 if key == 'Seconds_Behind_Master' && value.nil?
+          output "#{config[:scheme]}.#{mysql_shorthostname}.general.#{metrics['general'][key]}", value
+        end
+      end
+    rescue => e
+      puts "Error querying slave status: #{e}" if config[:verbose]
+    end
+
+    begin
+      variables_results = mysql.query('SHOW GLOBAL VARIABLES')
+
+      category = 'configuration'
+      variables_results.each_hash do |row|
+        metrics[category].each do |metric, desc|
+          if metric.casecmp(row['Variable_name']) == 0
+            output "#{config[:scheme]}.#{mysql_shorthostname}.#{category}.#{desc}", row['Value']
+          end
+        end
+      end
+    rescue => e
+      puts e.message
+    end
+
+    mysql.close if mysql
   end
+
+  ok
 end
