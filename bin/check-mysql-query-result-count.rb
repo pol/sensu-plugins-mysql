@@ -20,7 +20,7 @@ class MysqlQueryCountCheck < Sensu::Plugin::Check::CLI
   option :host,
          short: '-h HOST',
          long: '--host HOST',
-         description: 'MySQL Host to connect to',
+         description: 'MySQL Host to connect to'
 
   option :port,
          short: '-P PORT',

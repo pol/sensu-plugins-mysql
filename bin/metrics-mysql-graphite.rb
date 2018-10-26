@@ -47,7 +47,7 @@ class MysqlGraphite < Sensu::Plugin::Metric::CLI::Graphite
   option :host,
          short: '-h HOST',
          long: '--host HOST',
-         description: 'Mysql Host to connect to',
+         description: 'Mysql Host to connect to'
 
   option :port,
          short: '-P PORT',
