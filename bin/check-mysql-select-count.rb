@@ -96,7 +96,7 @@ class MysqlSelectCountCheck < Sensu::Plugin::Check::CLI
     elsif config[:yaml]
       yml        = YAML.safe_load(File.read(config[:yaml]))
       section    = yml[config[:ini_section]]
-      db_user    = section['user']
+      db_user    = section['username']
       db_pass    = section['password']
       mysql_host = section['host']
     else

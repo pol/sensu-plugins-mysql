@@ -297,7 +297,7 @@ class MetricsMySQLRaw < Sensu::Plugin::Metric::CLI::Graphite
     elsif config[:yaml]
       yml        = YAML.safe_load(File.read(config[:yaml]))
       section    = yml[config[:ini_section]]
-      db_user    = section['user']
+      db_user    = section['username']
       db_pass    = section['password']
       db_socket = if config[:socket]
                     config[:socket]
