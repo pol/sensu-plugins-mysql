@@ -22,7 +22,6 @@ class MysqlSelectCountCheck < Sensu::Plugin::Check::CLI
          short: '-h HOST',
          long: '--host HOST',
          description: 'MySQL Host to connect to',
-         required: true
 
   option :port,
          short: '-P PORT',

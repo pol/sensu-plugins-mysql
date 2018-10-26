@@ -15,7 +15,7 @@
 require 'sensu-plugin/check/cli'
 require 'mysql'
 require 'inifile'
-require 'yaml' 
+require 'yaml'
 
 class CheckMySQLHealth < Sensu::Plugin::Check::CLI
   option :user,

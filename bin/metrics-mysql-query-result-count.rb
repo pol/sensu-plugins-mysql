@@ -21,7 +21,6 @@ class MysqlQueryCountMetric < Sensu::Plugin::Metric::CLI::Graphite
          short: '-h HOST',
          long: '--host HOST',
          description: 'MySQL Host to connect to',
-         required: true
 
   option :port,
          short: '-P PORT',
