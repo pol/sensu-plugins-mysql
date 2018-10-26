@@ -59,7 +59,7 @@ class MysqlQueryCountMetric < Sensu::Plugin::Metric::CLI::Graphite
   option :ini_section,
          description: 'Section in my.cnf ini file',
          long: '--ini-section VALUE',
-         default: 'client'
+         default: 'production'
 
   option :socket,
          short: '-S SOCKET',

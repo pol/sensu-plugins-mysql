@@ -62,7 +62,7 @@ class CheckMySQL < Sensu::Plugin::Check::CLI
   option :ini_section,
          description: 'Section in my.cnf ini file',
          long: '--ini-section VALUE',
-         default: 'client'
+         default: 'production'
 
   option :hostname,
          description: 'Hostname to login to',
