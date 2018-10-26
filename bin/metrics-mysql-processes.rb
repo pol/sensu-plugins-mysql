@@ -159,7 +159,7 @@ class MetricsMySQLProcesses < Sensu::Plugin::Metric::CLI::Graphite
         output "#{config[:scheme]}.#{mysql_shorthostname}.#{key}.#{instance}", count
       end
     end
-  end
 
-  ok
+    ok
+  end
 end

@@ -211,8 +211,6 @@ class MysqlGraphite < Sensu::Plugin::Metric::CLI::Graphite
       }
     }
 
-    if 
-
     if config[:ini]
       ini        = IniFile.load(config[:ini])
       section    = ini[config[:ini_section]]
@@ -280,7 +278,8 @@ class MysqlGraphite < Sensu::Plugin::Metric::CLI::Graphite
     end
 
     mysql.close if mysql
+
+    ok
   end
 
-  ok
 end
